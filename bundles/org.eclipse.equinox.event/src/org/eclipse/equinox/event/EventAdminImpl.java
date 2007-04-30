@@ -11,8 +11,12 @@
 
 package org.eclipse.equinox.event;
 
+import java.security.Permission;
+import java.util.Iterator;
+import java.util.Set;
 import org.eclipse.osgi.framework.eventmgr.*;
-import org.osgi.framework.*;
+import org.eclipse.osgi.util.NLS;
+import org.osgi.framework.BundleContext;
 import org.osgi.service.event.*;
 import org.osgi.service.log.LogService;
 
@@ -42,7 +46,7 @@ public class EventAdminImpl implements EventAdmin {
 	 */
 	void start() {
 		log.open();
-		eventManager = new EventManager("EventAdmin Async Event Dispatcher Thread");
+		eventManager = new EventManager(EventAdminMsg.EVENT_ASYNC_THREAD_NAME);
 		handlers.open();
 	}
 
@@ -82,41 +86,49 @@ public class EventAdminImpl implements EventAdmin {
 	 *        for asyncronous delivery.
 	 */
 	private void dispatchEvent(Event event, boolean isAsync) {
-		try {
-			if (eventManager == null) {
-				// EventAdmin is stopped
-				return;
-			}
-			if (event == null) {
-				log.log(LogService.LOG_ERROR, "Null event is passed to EventAdmin. Ignored.");
-				return;
-			}
-			if (!checkTopicPermissionPublish(event.getTopic())) {
-				log.log(LogService.LOG_ERROR, "Caller bundle doesn't have TopicPermission for topic="+event.getTopic());
-				return;
-			}
-			
-			EventListeners listeners = handlers.getHandlers(event);
-			if (listeners == null) {
-				//No permitted EventHandler exists. Do nothing.
-				return;
-			}
-			
-			// Create the listener queue for this event delivery
-			ListenerQueue listenerQueue = new ListenerQueue(eventManager);
-			// Add the listeners to the queue and associate them with the event
-			// dispatcher
-			listenerQueue.queueListeners(listeners, handlers);
-			// Deliver the event to the listeners.
-			if (isAsync) {
-				listenerQueue.dispatchEventAsynchronous(0, event);
-			}
-			else {
-				listenerQueue.dispatchEventSynchronous(0, event);
-			}
+		if (eventManager == null) {
+			// EventAdmin is stopped
+			return;
 		}
-		catch (Throwable t) {
-			log.log(LogService.LOG_ERROR,"Exception thrown while dispatching an event, event = "+event, t);
+		if (event == null) {
+			log.log(LogService.LOG_ERROR, EventAdminMsg.EVENT_NULL_EVENT);
+			return;
+		}
+		
+		String topic = event.getTopic();
+		
+		if (!checkTopicPermissionPublish(topic)) {
+			log.log(LogService.LOG_ERROR, NLS.bind(EventAdminMsg.EVENT_NO_TOPICPERMISSION_PUBLISH, event.getTopic()));
+			return;
+		}
+		
+		Set eventHandlers = handlers.getHandlers(topic);
+		// If there are no handlers, then we are done
+		if (eventHandlers.size() == 0) {
+			return;
+		}
+		
+		SecurityManager sm = System.getSecurityManager();
+		Permission perm = (sm == null) ? null : new TopicPermission(topic, TopicPermission.SUBSCRIBE);
+		
+		EventListeners listeners = new EventListeners();
+		Iterator iter = eventHandlers.iterator();
+		while (iter.hasNext()) {
+			EventHandlerWrapper wrapper = (EventHandlerWrapper) iter.next();
+			listeners.addListener(wrapper, perm);
+		}
+		
+		// Create the listener queue for this event delivery
+		ListenerQueue listenerQueue = new ListenerQueue(eventManager);
+		// Add the listeners to the queue and associate them with the event
+		// dispatcher
+		listenerQueue.queueListeners(listeners, handlers);
+		// Deliver the event to the listeners.
+		if (isAsync) {
+			listenerQueue.dispatchEventAsynchronous(0, event);
+		}
+		else {
+			listenerQueue.dispatchEventSynchronous(0, event);
 		}
 	}
 

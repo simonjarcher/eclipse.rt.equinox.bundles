@@ -19,7 +19,7 @@ public class Activator implements BundleActivator {
 	private ServiceRegistration eventAdminService;
 	private EventAdminImpl eventAdmin;
 	
-	public synchronized void start(BundleContext bundleContext) {
+	public void start(BundleContext bundleContext) {
 		eventAdmin = new EventAdminImpl(bundleContext);
 		eventAdmin.start();
 		eventAdminService = bundleContext.registerService("org.osgi.service.event.EventAdmin", //$NON-NLS-1$
@@ -28,7 +28,7 @@ public class Activator implements BundleActivator {
 		eventRedeliverer.open();
 	}
 	
-	public synchronized void stop(BundleContext bundleContext) {
+	public void stop(BundleContext bundleContext) {
 		eventRedeliverer.close();
 		eventAdminService.unregister();
 		eventAdmin.stop();
