@@ -19,6 +19,7 @@ public class LogTrackerMsg extends NLS {
 	public static String Info;
 	public static String Warning;
 	public static String Error;
+	public static String Debug;
 
 	static {
 		// initialize resource bundles

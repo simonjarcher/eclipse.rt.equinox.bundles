@@ -11,6 +11,9 @@
 package org.eclipse.equinox.event;
 
 import java.io.PrintStream;
+import java.util.Calendar;
+import java.util.Date;
+
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.ServiceReference;
 import org.osgi.service.log.LogService;
@@ -26,7 +29,7 @@ public class LogTracker extends ServiceTracker implements LogService {
 	protected final static String clazz = "org.osgi.service.log.LogService"; //$NON-NLS-1$
 
 	/** PrintStream to use if LogService is unavailable */
-	protected PrintStream out;
+	private final PrintStream out;
 
 	/**
 	 * Create new LogTracker.
@@ -69,7 +72,7 @@ public class LogTracker extends ServiceTracker implements LogService {
 					try {
 						service.log(reference, level, message, exception);
 					} catch (Exception e) {
-						noLogService(level, message, exception, reference);
+						// TODO: consider printing to System Error
 					}
 				}
 			}
@@ -91,9 +94,14 @@ public class LogTracker extends ServiceTracker implements LogService {
 	protected void noLogService(int level, String message, Throwable throwable, ServiceReference reference) {
 		if (out != null) {
 			synchronized (out) {
+				// Bug #113286.  If no log service present and messages are being
+				// printed to stdout, prepend message with a timestamp.
+				String timestamp = getDate(new Date());
+				out.print(timestamp + " "); //$NON-NLS-1$
+
 				switch (level) {
 					case LOG_DEBUG : {
-						out.print("Debug: "); //$NON-NLS-1$
+						out.print(LogTrackerMsg.Debug);
 
 						break;
 					}
@@ -132,5 +140,35 @@ public class LogTracker extends ServiceTracker implements LogService {
 				}
 			}
 		}
+	}
+	
+	// from EclipseLog to avoid using DateFormat -- see bug 149892#c10
+	private String getDate(Date date) {
+			Calendar c = Calendar.getInstance();
+			c.setTime(date);
+			StringBuffer sb = new StringBuffer();
+			appendPaddedInt(c.get(Calendar.YEAR), 4, sb).append('-');
+			appendPaddedInt(c.get(Calendar.MONTH) + 1, 2, sb).append('-');
+			appendPaddedInt(c.get(Calendar.DAY_OF_MONTH), 2, sb).append(' ');
+			appendPaddedInt(c.get(Calendar.HOUR_OF_DAY), 2, sb).append(':');
+			appendPaddedInt(c.get(Calendar.MINUTE), 2, sb).append(':');
+			appendPaddedInt(c.get(Calendar.SECOND), 2, sb).append('.');
+			appendPaddedInt(c.get(Calendar.MILLISECOND), 3, sb);
+			return sb.toString();
+	}
+
+	private StringBuffer appendPaddedInt(int value, int pad, StringBuffer buffer) {
+		pad = pad - 1;
+		if (pad == 0)
+			return buffer.append(Integer.toString(value));
+		int padding = (int) Math.pow(10, pad);
+		if (value >= padding)
+			return buffer.append(Integer.toString(value));
+		while (padding > value && padding > 1) {
+			buffer.append('0');
+			padding = padding / 10;
+		}
+		buffer.append(value);
+		return buffer;
 	}
 }
