@@ -86,20 +86,26 @@ public class EventAdminImpl implements EventAdmin {
 	 *        for asyncronous delivery.
 	 */
 	private void dispatchEvent(Event event, boolean isAsync) {
-		if (eventManager == null) {
+		// keep a local copy in case we are stopped in the middle of dispatching
+		EventManager currentManager = eventManager;
+		if (currentManager == null) {
 			// EventAdmin is stopped
 			return;
 		}
 		if (event == null) {
 			log.log(LogService.LOG_ERROR, EventAdminMsg.EVENT_NULL_EVENT);
-			return;
+			// continue from here will result in an NPE below; the spec for EventAdmin does not allow for null here
 		}
 		
 		String topic = event.getTopic();
 		
-		if (!checkTopicPermissionPublish(topic)) {
-			log.log(LogService.LOG_ERROR, NLS.bind(EventAdminMsg.EVENT_NO_TOPICPERMISSION_PUBLISH, event.getTopic()));
-			return;
+		try {
+			checkTopicPermissionPublish(topic);
+		} catch (SecurityException e) {
+			String msg = NLS.bind(EventAdminMsg.EVENT_NO_TOPICPERMISSION_PUBLISH, event.getTopic());
+			log.log(LogService.LOG_ERROR, msg);
+			// must throw a security exception here according to the EventAdmin spec
+			throw e;
 		}
 		
 		Set eventHandlers = handlers.getHandlers(topic);
@@ -119,7 +125,7 @@ public class EventAdminImpl implements EventAdmin {
 		}
 		
 		// Create the listener queue for this event delivery
-		ListenerQueue listenerQueue = new ListenerQueue(eventManager);
+		ListenerQueue listenerQueue = new ListenerQueue(currentManager);
 		// Add the listeners to the queue and associate them with the event
 		// dispatcher
 		listenerQueue.queueListeners(listeners, handlers);
@@ -136,20 +142,13 @@ public class EventAdminImpl implements EventAdmin {
 	 * Checks if the caller bundle has right PUBLISH TopicPermision.
 	 * 
 	 * @param topic
-	 * @return true if it has the right permission, false otherwise.
+	 * @throws SecurityException if the caller does not have the right to PUBLISH TopicPermission
 	 */
-	private boolean checkTopicPermissionPublish(String topic) {
+	private void checkTopicPermissionPublish(String topic) throws SecurityException{
 		SecurityManager sm = System.getSecurityManager();
-		if (sm == null) {
-			return true;
-		}
-		try {
-			sm.checkPermission(new TopicPermission(topic, TopicPermission.PUBLISH));
-		}
-		catch (SecurityException e) { // fall through and return false
-			return false;
-		}
-		return true;
+		if (sm == null)
+			return;
+		sm.checkPermission(new TopicPermission(topic, TopicPermission.PUBLISH));
 	}
 
 }

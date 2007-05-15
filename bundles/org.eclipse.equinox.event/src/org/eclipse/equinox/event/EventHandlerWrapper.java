@@ -46,7 +46,7 @@ public class EventHandlerWrapper {
 	/**
 	 * Cache values from service properties
 	 * 
-	 * @return true of the handler should be called; false if the handler should not be called
+	 * @return true if the handler should be called; false if the handler should not be called
 	 */
 	public synchronized boolean init() {
 		topics = null;
@@ -144,7 +144,7 @@ public class EventHandlerWrapper {
 	}
 
 	/**
-	 * Dispatch event to handler. Perform final tests before actually calling the hanlder.
+	 * Dispatch event to handler. Perform final tests before actually calling the handler.
 	 * 
 	 * @param event The event to dispatch
 	 * @param perm The permission to be checked
